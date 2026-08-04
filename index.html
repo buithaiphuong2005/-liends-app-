@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Liends - Tra cứu hội viên</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 16px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 24px;
+            padding-top: 20px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            margin-bottom: 16px;
+        }
+
+        .file-picker-section {
+            text-align: center;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-button {
+            display: block;
+            width: 100%;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            touch-action: manipulation;
+        }
+
+        .file-button:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .file-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .file-info {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f0f4ff;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #555;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-info strong {
+            color: #667eea;
+        }
+
+        .search-section {
+            display: none;
+        }
+
+        .search-section.show {
+            display: block;
+        }
+
+        .search-box {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 16px 0;
+            z-index: 10;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 20px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #667eea;
+        }
+
+        .results-info {
+            padding: 12px 0;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+        }
+
+        .results {
+            margin-top: 16px;
+        }
+
+        .result-item {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: box-shadow 0.2s;
+        }
+
+        .result-item:active {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .result-field {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+
+        .result-field:last-child {
+            margin-bottom: 0;
+        }
+
+        .result-label {
+            display: inline-block;
+            font-weight: 600;
+            color: #667eea;
+            min-width: 60px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .result-value {
+            color: #333;
+            font-size: 15px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .no-results svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 16px;
+            border-radius: 12px;
+            margin-top: 16px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .reset-button {
+            margin-top: 16px;
+            padding: 12px 24px;
+            background: #f0f0f0;
+            color: #666;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+        }
+
+        .reset-button:active {
+            background: #e0e0e0;
+        }
+
+        .change-file-button {
+            margin-top: 12px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+        }
+
+        .change-file-button:active {
+            transform: scale(0.98);
+        }
+
+        .hidden-file-input {
+            position: absolute;
+            left: -9999px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Liends</h1>
+            <p>Tra cứu thông tin hội viên</p>
+        </div>
+
+        <div class="card file-picker-section" id="filePickerSection">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept=".xlsx,.xls" aria-label="Chọn file Excel">
+                <label for="fileInput" class="file-button" id="fileButton">
+                    📁 Chọn file Excel
+                </label>
+            </div>
+            <div class="file-info" id="fileInfo"></div>
+            <div id="loadingIndicator" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <div>Đang đọc file...</div>
+            </div>
+            <div id="errorMessage"></div>
+        </div>
+
+        <div class="search-section" id="searchSection">
+            <div class="card">
+                <div class="search-box">
+                    <input
+                        type="search"
+                        id="searchInput"
+                        class="search-input"
+                        placeholder="🔍 Tìm kiếm..."
+                        autocomplete="off"
+                    >
+                </div>
+                <div class="results-info" id="resultsInfo">Sẵn sàng tìm kiếm</div>
+
+                <!-- Hidden file input for changing file -->
+                <input type="file" id="changeFileInput" accept=".xlsx,.xls" class="hidden-file-input" aria-label="Đổi file Excel">
+                <button class="change-file-button" id="changeFileButton">📁 Đổi file Excel</button>
+            </div>
+
+            <div class="results" id="results"></div>
+
+            <button class="reset-button" id="resetButton">↻ Reset</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script>
+        let searchData = [];
+        let allRows = [];
+
+        const fileInput = document.getElementById('fileInput');
+        const fileButton = document.getElementById('fileButton');
+        const fileInfo = document.getElementById('fileInfo');
+        const filePickerSection = document.getElementById('filePickerSection');
+        const searchSection = document.getElementById('searchSection');
+        const searchInput = document.getElementById('searchInput');
+        const results = document.getElementById('results');
+        const resultsInfo = document.getElementById('resultsInfo');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+        const resetButton = document.getElementById('resetButton');
+        const changeFileInput = document.getElementById('changeFileInput');
+        const changeFileButton = document.getElementById('changeFileButton');
+
+        // File selection handler (shared logic)
+        async function handleFileSelection(file) {
+            if (!file) return;
+
+            // Show loading in search section if already there
+            const isInSearchView = searchSection.classList.contains('show');
+
+            if (isInSearchView) {
+                results.innerHTML = '<div class="loading"><div class="spinner"></div><div>Đang đọc file mới...</div></div>';
+            } else {
+                loadingIndicator.style.display = 'block';
+                fileButton.disabled = true;
+            }
+
+            errorMessage.innerHTML = '';
+
+            try {
+                // Read file
+                const data = await file.arrayBuffer();
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                // Get first sheet
+                const firstSheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[firstSheetName];
+
+                // Convert to array of arrays
+                const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                // Extract all columns starting from B (index 1 onwards)
+                allRows = jsonData.slice(1).filter(row => {
+                    // Filter out completely empty rows (check from column B onwards)
+                    return row.slice(1).some(cell => cell);
+                }).map((row, index) => {
+                    // Get all columns from B onwards
+                    const columns = {};
+                    for (let i = 1; i < row.length; i++) {
+                        columns[`col${String.fromCharCode(65 + i)}`] = String(row[i] || '').trim();
+                    }
+                    return {
+                        rowIndex: index + 2, // +2 because we skip header and array is 0-indexed
+                        ...columns
+                    };
+                });
+
+                searchData = allRows;
+
+                // Show file info
+                fileInfo.innerHTML = `<strong>✓ Đã tải:</strong> ${file.name} (${allRows.length} dòng)`;
+                fileInfo.classList.add('show');
+
+                // Switch to search view if not already there
+                if (!isInSearchView) {
+                    setTimeout(() => {
+                        filePickerSection.style.display = 'none';
+                        searchSection.classList.add('show');
+                        searchInput.focus();
+                        renderResults(searchData);
+                    }, 500);
+                } else {
+                    // Already in search view, just update results
+                    searchInput.value = '';
+                    renderResults(searchData);
+                    resultsInfo.textContent = `Đã tải ${allRows.length} dòng từ ${file.name}`;
+                }
+
+            } catch (error) {
+                console.error('Error reading file:', error);
+
+                if (isInSearchView) {
+                    results.innerHTML = `<div class="error">❌ Lỗi đọc file: ${error.message}<br><br>Vui lòng kiểm tra:<br>• File có đúng định dạng Excel (.xlsx, .xls)?<br>• File có bị hỏng hoặc bảo vệ?</div>`;
+                } else {
+                    errorMessage.innerHTML = `<div class="error">❌ Lỗi đọc file: ${error.message}<br><br>Vui lòng kiểm tra:<br>• File có đúng định dạng Excel (.xlsx, .xls)?<br>• File có bị hỏng hoặc bảo vệ?</div>`;
+                }
+            } finally {
+                if (!isInSearchView) {
+                    loadingIndicator.style.display = 'none';
+                    fileButton.disabled = false;
+                }
+            }
+        }
+
+        // Initial file selection
+        fileInput.addEventListener('change', async (e) => {
+            await handleFileSelection(e.target.files[0]);
+        });
+
+        // Change file button (in search view)
+        changeFileButton.addEventListener('click', () => {
+            changeFileInput.click();
+        });
+
+        changeFileInput.addEventListener('change', async (e) => {
+            await handleFileSelection(e.target.files[0]);
+        });
+
+        // Search handler
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+
+            if (!query) {
+                renderResults(allRows);
+                return;
+            }
+
+            const filtered = allRows.filter(row => {
+                // Search in all columns (except rowIndex)
+                const searchText = Object.keys(row)
+                    .filter(key => key !== 'rowIndex')
+                    .map(key => row[key])
+                    .join(' ')
+                    .toLowerCase();
+                return searchText.includes(query);
+            });
+
+            renderResults(filtered);
+        });
+
+        // Render results
+        function renderResults(data) {
+            if (data.length === 0) {
+                results.innerHTML = `
+                    <div class="no-results">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <div>Không tìm thấy kết quả</div>
+                    </div>
+                `;
+                resultsInfo.textContent = 'Không có kết quả';
+                return;
+            }
+
+            resultsInfo.textContent = `Hiển thị ${data.length} kết quả`;
+
+            results.innerHTML = data.map(row => {
+                // Generate HTML for all columns (except rowIndex)
+                const fields = Object.keys(row)
+                    .filter(key => key !== 'rowIndex')
+                    .map(key => {
+                        const columnName = key.substring(3); // Remove 'col' prefix to get 'B', 'C', etc.
+                        const value = escapeHtml(row[key]) || '<em style="color: #ccc;">Trống</em>';
+                        return `
+                            <div class="result-field">
+                                <span class="result-label">Cột ${columnName}:</span>
+                                <span class="result-value">${value}</span>
+                            </div>
+                        `;
+                    })
+                    .join('');
+
+                return `<div class="result-item">${fields}</div>`;
+            }).join('');
+        }
+
+        // Reset handler
+        resetButton.addEventListener('click', () => {
+            fileInput.value = '';
+            changeFileInput.value = '';
+            searchInput.value = '';
+            searchData = [];
+            allRows = [];
+            fileInfo.classList.remove('show');
+            fileInfo.innerHTML = '';
+            searchSection.classList.remove('show');
+            filePickerSection.style.display = 'block';
+            results.innerHTML = '';
+        });
+
+        // Utility function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Prevent zoom on input focus (iOS)
+        document.addEventListener('touchstart', function() {}, { passive: true });
+    </script>
+</body>
+</html>
