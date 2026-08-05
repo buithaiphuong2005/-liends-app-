@@ -124,6 +124,14 @@
             background: white;
             padding: 16px 0;
             z-index: 10;
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .search-box .search-input {
+            flex: 1;
+            min-width: 0;
         }
 
         .search-input {
@@ -138,6 +146,89 @@
 
         .search-input:focus {
             border-color: #667eea;
+        }
+
+        .column-toggle-button {
+            flex-shrink: 0;
+            padding: 0 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            background: #fff;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .column-toggle-button:active {
+            transform: scale(0.98);
+        }
+
+        .column-panel {
+            background: #f7f8fc;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 10px 12px;
+            margin-top: 8px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        .column-list {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .column-check {
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            width: 33.33%;
+            margin: 6px 0;
+            padding-right: 8px;
+            font-size: 13px;
+            color: #444;
+            gap: 6px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+
+        .column-check input {
+            flex-shrink: 0;
+        }
+
+        .column-check span {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .column-actions {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 8px;
+        }
+
+        .column-actions button {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #eef1ff;
+            color: #667eea;
+            touch-action: manipulation;
+        }
+
+        .column-actions button:active {
+            background: #dee4ff;
         }
 
         .results-info {
@@ -305,6 +396,14 @@
                         placeholder="🔍 Tìm kiếm..."
                         autocomplete="off"
                     >
+                    <button type="button" class="column-toggle-button" id="columnToggleButton" aria-label="Chọn cột hiển thị">👁 Cột</button>
+                </div>
+                <div class="column-panel" id="columnPanel" style="display:none;">
+                    <div class="column-list" id="columnList"></div>
+                    <div class="column-actions">
+                        <button type="button" id="selectAllCols">✓ Chọn tất cả</button>
+                        <button type="button" id="clearAllCols">▢ Bỏ tất cả</button>
+                    </div>
                 </div>
                 <div class="results-info" id="resultsInfo">Sẵn sàng tìm kiếm</div>
 
@@ -323,6 +422,9 @@
     <script>
         let searchData = [];
         let allRows = [];
+        let hiddenCols = new Set();   // column keys currently hidden
+        let colLabels = {};           // colKey -> display label (header name or fallback)
+        let colOrder = [];            // ordered list of column keys
 
         const fileInput = document.getElementById('fileInput');
         const fileButton = document.getElementById('fileButton');
@@ -337,6 +439,47 @@
         const resetButton = document.getElementById('resetButton');
         const changeFileInput = document.getElementById('changeFileInput');
         const changeFileButton = document.getElementById('changeFileButton');
+        const columnToggleButton = document.getElementById('columnToggleButton');
+        const columnPanel = document.getElementById('columnPanel');
+        const columnList = document.getElementById('columnList');
+        const selectAllCols = document.getElementById('selectAllCols');
+        const clearAllCols = document.getElementById('clearAllCols');
+
+        // Convert a column key like 'colB'/'colAA' to its numeric index (B=1, AA=26)
+        function colKeyToIndex(key) {
+            let idx = 0;
+            for (const ch of key.slice(3)) {
+                idx = idx * 26 + (ch.charCodeAt(0) - 64);
+            }
+            return idx;
+        }
+
+        // Build the checkbox list for column visibility
+        function buildColumnPanel() {
+            columnList.innerHTML = colOrder.map(key => {
+                const checked = !hiddenCols.has(key);
+                return `
+                    <label class="column-check">
+                        <input type="checkbox" value="${key}" ${checked ? 'checked' : ''}>
+                        <span>${escapeHtml(colLabels[key] || key)}</span>
+                    </label>
+                `;
+            }).join('');
+        }
+
+        // Returns rows matching the current search query (searches ALL columns, regardless of visibility)
+        function getFilteredRows() {
+            const query = searchInput.value.toLowerCase().trim();
+            if (!query) return allRows;
+            return allRows.filter(row => {
+                const searchText = Object.keys(row)
+                    .filter(key => key !== 'rowIndex')
+                    .map(key => row[key])
+                    .join(' ')
+                    .toLowerCase();
+                return searchText.includes(query);
+            });
+        }
 
         // File selection handler (shared logic)
         async function handleFileSelection(file) {
@@ -366,6 +509,17 @@
                 // Convert to array of arrays
                 const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
+                // Keep header row (index 0) to build real column labels
+                const headerRow = jsonData[0] || [];
+
+                const labelMap = {};
+                const colKeySet = new Set();
+                for (let i = 1; i < headerRow.length; i++) {
+                    const key = `col${String.fromCharCode(65 + i)}`;
+                    colKeySet.add(key);
+                    labelMap[key] = String(headerRow[i] || '').trim() || `Cột ${String.fromCharCode(65 + i)}`;
+                }
+
                 // Extract all columns starting from B (index 1 onwards)
                 allRows = jsonData.slice(1).filter(row => {
                     // Filter out completely empty rows (check from column B onwards)
@@ -374,7 +528,12 @@
                     // Get all columns from B onwards
                     const columns = {};
                     for (let i = 1; i < row.length; i++) {
-                        columns[`col${String.fromCharCode(65 + i)}`] = String(row[i] || '').trim();
+                        const key = `col${String.fromCharCode(65 + i)}`;
+                        columns[key] = String(row[i] || '').trim();
+                        colKeySet.add(key);
+                        if (!labelMap[key]) {
+                            labelMap[key] = `Cột ${String.fromCharCode(65 + i)}`;
+                        }
                     }
                     return {
                         rowIndex: index + 2, // +2 because we skip header and array is 0-indexed
@@ -382,7 +541,14 @@
                     };
                 });
 
+                // Ordered list of unique columns across the whole file
+                colOrder = Array.from(colKeySet).sort((a, b) => colKeyToIndex(a) - colKeyToIndex(b));
+                colLabels = labelMap;
+                // Reset visibility: show all columns on (re)load
+                hiddenCols = new Set();
+
                 searchData = allRows;
+                buildColumnPanel();
 
                 // Show file info
                 fileInfo.innerHTML = `<strong>✓ Đã tải:</strong> ${file.name} (${allRows.length} dòng)`;
@@ -434,25 +600,38 @@
         });
 
         // Search handler
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase().trim();
+        searchInput.addEventListener('input', () => {
+            renderResults(getFilteredRows());
+        });
 
-            if (!query) {
-                renderResults(allRows);
-                return;
+        // Column visibility: toggle panel open/close
+        columnToggleButton.addEventListener('click', () => {
+            const showing = columnPanel.style.display !== 'none';
+            columnPanel.style.display = showing ? 'none' : 'block';
+        });
+
+        // Column visibility: toggle individual column
+        columnList.addEventListener('change', (e) => {
+            if (e.target && e.target.type === 'checkbox') {
+                const key = e.target.value;
+                if (e.target.checked) hiddenCols.delete(key);
+                else hiddenCols.add(key);
+                renderResults(getFilteredRows());
             }
+        });
 
-            const filtered = allRows.filter(row => {
-                // Search in all columns (except rowIndex)
-                const searchText = Object.keys(row)
-                    .filter(key => key !== 'rowIndex')
-                    .map(key => row[key])
-                    .join(' ')
-                    .toLowerCase();
-                return searchText.includes(query);
-            });
+        // Column visibility: select all
+        selectAllCols.addEventListener('click', () => {
+            hiddenCols.clear();
+            buildColumnPanel();
+            renderResults(getFilteredRows());
+        });
 
-            renderResults(filtered);
+        // Column visibility: clear all
+        clearAllCols.addEventListener('click', () => {
+            hiddenCols = new Set(colOrder);
+            buildColumnPanel();
+            renderResults(getFilteredRows());
         });
 
         // Render results
@@ -473,15 +652,15 @@
             resultsInfo.textContent = `Hiển thị ${data.length} kết quả`;
 
             results.innerHTML = data.map(row => {
-                // Generate HTML for all columns (except rowIndex)
-                const fields = Object.keys(row)
-                    .filter(key => key !== 'rowIndex')
+                // Generate HTML only for visible columns (respect hiddenCols)
+                const fields = colOrder
+                    .filter(key => !hiddenCols.has(key))
                     .map(key => {
-                        const columnName = key.substring(3); // Remove 'col' prefix to get 'B', 'C', etc.
+                        const label = colLabels[key] || key;
                         const value = escapeHtml(row[key]) || '<em style="color: #ccc;">Trống</em>';
                         return `
                             <div class="result-field">
-                                <span class="result-label">Cột ${columnName}:</span>
+                                <span class="result-label">${escapeHtml(label)}:</span>
                                 <span class="result-value">${value}</span>
                             </div>
                         `;
@@ -499,6 +678,11 @@
             searchInput.value = '';
             searchData = [];
             allRows = [];
+            hiddenCols = new Set();
+            colLabels = {};
+            colOrder = [];
+            columnPanel.style.display = 'none';
+            columnList.innerHTML = '';
             fileInfo.classList.remove('show');
             fileInfo.innerHTML = '';
             searchSection.classList.remove('show');
