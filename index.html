@@ -467,6 +467,22 @@
             }).join('');
         }
 
+        // Excel serial number -> dd/mm/yyyy. Pure UTC day-math: immune to device timezone,
+        // handles the 1900 leap-year quirk and date1904 workbooks; floors time fractions.
+        function serialToDMY(n, date1904) {
+            if (typeof n !== 'number' || !isFinite(n)) return '';
+            if (date1904) n += 1462;
+            const days = Math.floor(n);
+            if (days < 0) return '';  // Excel has no pre-1900 dates (SSF renders '')
+            // Excel calendar edge cases (1900 system, unreachable after date1904 shift):
+            if (days === 0) return '00/01/1900';   // serial 0 = "January 0"
+            if (days === 60) return '29/02/1900';  // phantom leap day Excel displays
+            const base = days < 60 ? Date.UTC(1899, 11, 31) : Date.UTC(1899, 11, 30);
+            const d = new Date(base + days * 86400000);
+            const p = x => String(x).padStart(2, '0');
+            return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+        }
+
         // Returns rows matching the current search query (searches ALL columns, regardless of visibility)
         function getFilteredRows() {
             const query = searchInput.value.toLowerCase().trim();
@@ -500,7 +516,9 @@
             try {
                 // Read file
                 const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data, { type: 'array' });
+                // cellNF: load each cell's number format (cell.z) so date-formatted cells
+                // can be detected exactly the way Excel does
+                const workbook = XLSX.read(data, { type: 'array', cellNF: true });
 
                 // Get first sheet
                 const firstSheetName = workbook.SheetNames[0];
@@ -508,6 +526,23 @@
 
                 // Convert to array of arrays
                 const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                // Date-styled cells: replace with dd/mm/yyyy from the raw serial in the sheet
+                // (never trust sheet_to_json's Date objects — timezone-unstable across versions;
+                // text cells keep their original string, General numbers stay numbers)
+                const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+                const date1904 = !!(workbook.Workbook && workbook.Workbook.WBProps && workbook.Workbook.WBProps.date1904);
+                jsonData.forEach((row, ri) => {
+                    const sr = range.s.r + ri;
+                    for (let ci = 0; ci < row.length; ci++) {
+                        const cell = sheet[XLSX.utils.encode_cell({ r: sr, c: ci })];
+                        if (cell && cell.z && XLSX.SSF.is_date(cell.z)) {
+                            row[ci] = typeof cell.v === 'number'
+                                ? serialToDMY(cell.v, date1904)
+                                : String(cell.v == null ? '' : cell.v);
+                        }
+                    }
+                });
 
                 // Keep header row (index 0) to build real column labels
                 const headerRow = jsonData[0] || [];
